@@ -43,9 +43,9 @@ TODO
 
 TODO: How it works in a few words
 
-A period only starts when the Flow is updated via receiving or sending a packet, and not right after the period ends. This means that if no calls happen after a period expires, the next period will begin at the time of the next call and be valid for the specified duration for the quota. This is a design decision to avoid the period calculations and thus reduce gas consumption.
+Text from the doc that could be used here:
 
-The channel value is reset when the duration expires or if it has not been set. This is important: once set and while the duration does not expire, the channel value does not change.
+A period only starts when the Flow is updated via receiving or sending a packet, and not right after the period ends. This means that if no calls happen after a period expires, the next period will begin at the time of the next call and be valid for the specified duration for the quota. This is a design decision to avoid the period calculations and thus reduce gas consumption.
 
 ### Data structures
 
