@@ -28,8 +28,8 @@ A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e.,
 
 ### Assumptions
 
-The module has access to a `bank` module. The specification assumes that this module permits the rate limiter module to query:
-(i) the escrowed amount for a given denom and channel pair, and (ii) the total available supply of tokens for a given denom in the chain.
+The module has access to a `bank` module similar to the one implemented in the [SDK](https://github.com/cosmos/cosmos-sdk/blob/main/x/bank/README.md). The specification assumes that this module permits the rate limiter module to query:
+(i) the escrowed amount for a given denom and channel pair via the `bank.GetEscrowDenom` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
 
 TODO: more assumptions
 
@@ -122,8 +122,6 @@ This specification proposes the following:
 - For (2), channel value = escrow value (per channel and denom) in the receiver chain. One cannot receive more than what is in the escrow anyway, and this way we prevent attackers from emptying the escrow accounts completely.
 - For (3), channel value = the available supply (minted) of denom in the sender chain. Not risky, as this means only the tokens received through THIS channel due to prefixing of channel ids to denoms.
 - For (4), channel value = the available supply of denom in the sender chain.
-
-Note that the `bank` module used by the function is unspecified.
 
 ```typescript
 function computeChannelValue(
@@ -238,7 +236,7 @@ function SendPacket(packet: Packet): error {
     rateLimiter = privateStore.get(rateLimiterPath(packet.sourceChannel, data.denom))
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
-        err = checkAndUpdateRateLimits(packet.destChannel, source, data.denom, data.amount, IN)
+        err = checkAndUpdateRateLimits(packet.destChannel, source, data.denom, data.amount, OUT)
         if (err !== nil)
             return err
     }
