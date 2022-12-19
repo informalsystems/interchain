@@ -1,3 +1,4 @@
+# IBC rate limiter
 
 ## Synopsis
 
@@ -9,7 +10,7 @@ This document specifies the data structures and state machine handling logic for
 
 TODO
 
-### Definitions 
+### Definitions
 
 `FlowPath` is a tuple of a denom and a channel.
 
@@ -39,7 +40,7 @@ TODO
 
 ## Technical Specification
 
-### General Design 
+### General Design
 
 TODO: How it works in a few words
 
@@ -67,6 +68,7 @@ interface Flow {
   periodEnd: uint
 }
 ```
+
 Tokens can flow in two directions:
 
 ```typescript
@@ -75,6 +77,7 @@ enum FlowDirection {
   OUT
 }
 ```
+
 A `Quota` is defined as:
 
 ```typescript
@@ -86,6 +89,7 @@ interface Quota {
   channelValue: uint
 }
 ```
+
 Percentages can be different for send and receive. The name of the quota is expected to be a human-readable representation of the duration (i.e.: "weekly", "daily", "every-six-months", ...).
 
 A `RateLimiter` is a tuple of a `Quota` and `Flow`.
@@ -96,6 +100,7 @@ interface RateLimiter {
   flow: Flow
 }
 ```
+
 ### Store paths
 
 The rate limiter path is a private path that stores rate limiters.
@@ -118,6 +123,7 @@ Channel value may be computed when sending or receiving tokens. Depending on whe
 4) Receive a non-native token: the receiving chain is not the denom source.
 
 This specification proposes the following:
+
 - For (1), channel value = the available supply of denom in the sender chain. This may be a bit risky, as the total supply may be very large.
 - For (2), channel value = escrow value (per channel and denom) in the receiver chain. One cannot receive more than what is in the escrow anyway, and this way we prevent attackers from emptying the escrow accounts completely.
 - For (3), channel value = the available supply (minted) of denom in the sender chain. Not risky, as this means only the tokens received through THIS channel due to prefixing of channel ids to denoms.
@@ -198,10 +204,11 @@ function checkAndUpdateRateLimits(
     rateLimiter.quota = quota
     rateLimiter.flow = flow
     privateStore.set(rateLimiterPath(channelId, denom), rateLimiter)
-    
+
     return nil
 }
 ```
+
 The function `undoSend` is called when an send of tokens went wrong. The function simply rolls back the outflow by substracting the amount sent.
 
 ```typescript
