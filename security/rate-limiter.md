@@ -131,7 +131,7 @@ The rate limiter path is a private path that stores rate limiters.
 
 ```typescript
 function rateLimiterPath(channel: Identifier, denom: string): Path {
-    return "ratelimiter/{id}/{denom}"
+    return "ratelimiter/{channel}/{denom}"
 }
 ```
 
@@ -164,9 +164,11 @@ function computeChannelValue(
     direction: FlowDirection,
     denom: string): int {
     if (source && direction === IN) {
+        // Handle case (2)
         escrowAccount = channelEscrowAddresses[channelId]
         return bank.GetEscrowDenom(escrowAccount, denom)
     } else {
+        // Cases (1), (3), and (4)
         return bank.GetAvailableSupply(denom)
     }
 }
@@ -174,7 +176,7 @@ function computeChannelValue(
 
 #### Checking and Updating Rate Limits
 
-The `checkAndUpdateRateLimits` function checks whether a send or receive should be processed or not depending on the rate limiter associated to the channel and denom. If it is accepted, then the rate limiter is updated to account for the newly sent/received tokens.
+The `checkAndUpdateRateLimits` function checks whether a send or receive should be processed or not (i.e., limited) depending on the rate limiter associated to the channel and denom. If it is accepted, then the rate limiter is updated to account for the newly sent/received tokens.
 
 The function introduces two concepts: flow balance and quota capacity. Flow balance is how much absolute value for the denom has moved through the channel during the current period. Quota capacity is how much value the quota allows to transfer in both directions in a given period of time.
 
@@ -241,7 +243,7 @@ function checkAndUpdateRateLimits(
 
 #### Undoing a Send
 
-The function `undoSend` is called when an send of tokens went wrong. (See `onAcknowledgePacket`  or `onTimeoutPacket` [sub-protocols](#sub-protocols) below for usage.) The function simply rolls back the outflow by substracting the amount sent.
+The function `undoSend` is called when a send of tokens went wrong. (See `onAcknowledgePacket`  or `onTimeoutPacket` [sub-protocols](#sub-protocols) below for usage of `undoSend`.) This function simply rolls back the outflow by substracting the amount sent.
 
 ```typescript
 function undoSend(packet: Packet) {
@@ -264,7 +266,7 @@ function undoSend(packet: Packet) {
 
 ### Sub-protocols
 
-`SendPacket` should be called after `sendFungibleTokens` of the fungible token transfer bridge module (ICS20) and before the send packet defined in ICS4.
+The `SendPacket` function should be called after `sendFungibleTokens` of the fungible token transfer bridge module (ICS20) and before the send packet defined in ICS4. This method calls into `checkAndUpdateRateLimits` to potentially throttle the sending of this packet if the quota has been exceeded.
 
 ```typescript
 function SendPacket(packet: Packet): error {
