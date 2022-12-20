@@ -18,7 +18,8 @@
       - [Checking and Updating Rate Limits](#checking-and-updating-rate-limits)
       - [Undoing a Send](#undoing-a-send)
     - [Sub-protocols](#sub-protocols)
-  - [Further Reading \& References](#further-reading--references)
+  - [Limitations and Recommendations](#limitations-and-recommendations)
+    - [Further Reading](#further-reading)
 
 ## Synopsis
 
@@ -56,21 +57,24 @@ A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e.,
 The IBC rate limiter module has access to a `bank` module similar to the one implemented in the [SDK](https://github.com/cosmos/cosmos-sdk/blob/main/x/bank/README.md). The specification assumes that this module permits the rate limiter module to query:
 (i) the escrowed amount for a given denom and channel pair via the `bank.GetEscrowDenom` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
 
-TODO: more assumptions
+See also [Limitations and Recommendations](#limitations-and-recommendations).
 
 ### Desired Properties
 
-TODO
+Intuitively, the desired properties of the rate limiter are as follows:
+
+- **Preserve legitimate flow**: The IBC rate limiter does not prevent (i.e., limit nor throttle) legitimate user flow of tokens. Legitimate flow is traffic that is within the allowed percentage set by any configurated `Quota` for any given `FlowPath`.
+- **Prevent illegitimate flow**: The rate limiter blocks any send or receive of tokens that exceeds the allowed percentage within the preset time window (set by any configurated `Quota` for any `FlowPath`).
 
 ## Technical Specification
 
 ### General Design
 
-TODO: How it works in a few words
+The rate limiter can be conceptualized as a middleware, sitting between the core IBC modules (for sending, receiving, acknowledging, or timing out packets) and the IBC application layer (ICS20 in this specific case). The figure below sketches the rate limiter design from the perspective of sending a packet ([figure source][design-figure-source]). The functions and types colored in the blue font belong to this spec.
 
-Text from the doc that could be used here:
+![IBC rate limiter general design](./assets/ibc-rate-limiter-general-design.svg)
 
-A period only starts when the Flow is updated via receiving or sending a packet, and not right after the period ends. This means that if no calls happen after a period expires, the next period will begin at the time of the next call and be valid for the specified duration for the quota. This is a design decision to avoid the period calculations and thus reduce gas consumption.
+Every time there is a fungible tokens packet sent, this calls into the rate limiter `SendPacket` function. This function retrieves the `FlowPath` and any rate limiter that may be set for that path, then calls into `checkAndUpdateRateLimits`, which does the heavy lifting in terms of updating and verifying if the current packet is or is not subject to limiting because the quota is reached. This function throws a `RateLimitExceededError` in the former case; in the latter case (when the packet is not subject to limiting), then the IBC core `SendPacket` method is called.
 
 ### Data Structures
 
@@ -332,7 +336,22 @@ function onTimeoutPacket(packet: Packet) {
 }
 ```
 
-## Further Reading & References
+## Limitations and Recommendations
+
+Below we enumerate some known limitations of this specification:
+
+- The `rateLimiterPath` function implies there is at most one rate limiter for each `FlowPath` (i.e., a channel and denom pair). This design can be generalized to allow multiple rate limiters per `FlowPath`. It is desirable to have multiple flows per path, eg one for a period of a day, one for an hour, and another one for a 10-minute interval, because this allows capturing a wider range of attack scenarios.
+- The current design computes quotas within fixed intervals of time (see `Flow.periodEnd`). This is a simpler design but has clear limitations. For instance, it allows an entire quota of a flow to be exhausted briefly after that flow was reset, allowing an attacker to time their exploit so that it lands at the beginning of a flow period. A more principled design would adopt a rolling time window.
+- The present spec is not adapted yet to implement the IBC Middleware interface (specified in [ICS 30][ics-31-spec]).
+
+For those whishing to implement an IBC rate limiter, we provide also a few recommendations:
+
+- The channel value is the key parameter to the rate limiter, in addition to `maxPercentageSend` and `maxPercentageRecv` as part of a `Quota`. These values determine what is *legitimate* packet flow. Misconfiguring the channel value can allow too much traffic (which can lead to complete depegging of an asset) or too little (preventing user transactions and raising UX/usability concerns). The discussion on [computing the channel value](#computing-the-channel-value) is merely a proposal.
+- We recommend running simulations of a rate limiter behavior with real data from mainnet, eg between Hub (`channel-141`) and Osmosis (`channel-0`).
+- Osmosis ([since v13.0][osmosis-ibc-rate-limit]) has adopted a rate limiter for throttling asset flow on high-value channels. This solution [also protects Osmosis counterparty networks][osmosis-ibc-rate-limit-inflow]. It would be recommended that counterparty networks wishing to adopt a rate limiter would employ a design and configuration that are *complementary* to the Osmosis one. This could mean, for instance, that CosmosHub (as a counterparty of Osmosis) employs a different method to configuring the channel value and to dealing with `RateLimitExceededError` cases.
+- On period computation, inspired from from Osmosis docs, we recommend that a period only starts when the Flow is updated via receiving or sending a packet, and not right after the period ends. This means that if no calls happen after a period expires, the next period will begin at the time of the next call and be valid for the specified duration for the quota. This is a design decision to avoid the period calculations and thus reduce gas consumption.
+
+### Further Reading
 
 - [Osmosis IBC rate limit module][osmosis-ibc-rate-limit]
 - Circuit breaker SDK [feature](https://github.com/cosmos/cosmos-sdk/issues/14226)
@@ -340,4 +359,7 @@ function onTimeoutPacket(packet: Packet) {
 <!-- Links & References -->
 
 [osmosis-ibc-rate-limit]: https://github.com/osmosis-labs/osmosis/tree/v13.0.0/x/ibc-rate-limit
+[osmosis-ibc-rate-limit-inflow]: https://github.com/osmosis-labs/osmosis/tree/v13.0.0/x/ibc-rate-limit#inflow-parameterization
 [bnb-bridge-hack]: https://rekt.news/bnb-bridge-rekt/
+[ics-31-spec]: https://github.com/cosmos/ibc/tree/main/spec/app/ics-030-middleware
+[design-figure-source]: https://app.excalidraw.com/l/4XqkU6POmGI/TTFAaey3Y7
