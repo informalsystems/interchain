@@ -74,7 +74,7 @@ The rate limiter can be conceptualized as a middleware, sitting between the core
 
 ![IBC rate limiter general design](./assets/ibc-rate-limiter-general-design.svg)
 
-Every time there is a fungible tokens packet sent, this calls into the rate limiter `SendPacket` function. This function retrieves the `FlowPath` and any rate limiter that may be set for that path, then calls into `checkAndUpdateRateLimits`, which does the heavy lifting in terms of updating and verifying if the current packet is or is not subject to limiting because the quota is reached. This function throws a `RateLimitExceededError` in the former case; in the latter case (when the packet is not subject to limiting), then the IBC core `SendPacket` method is called.
+Every time there is a fungible tokens packet sent, the rate limiter `SendPacket` function is called. This function retrieves the `FlowPath` and any rate limiter that may be set for that path, then calls into `checkAndUpdateRateLimits`, which verifies if the packet should be accepted. If the quota is reached, it throws a `RateLimitExceededError`. Otherwise the rate limiter is updated and the IBC core `SendPacket` method is called.
 
 ### Data Structures
 
