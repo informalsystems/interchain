@@ -23,7 +23,7 @@
 
 ## Synopsis
 
-This document specifies the data structures and state machine handling logic for a rate limiter module. The modules is designed to intermediate between the fungible token transfer bridge module (ICS20) and IBC core. The aim of this module is to enable chains to limit the amount of tokens that are sent and received within a period of time.
+This document specifies the data structures and state machine handling logic for a rate limiter module. The module is designed to intermediate between the fungible token transfer bridge module (ICS20) and IBC core. The aim of this module is to enable chains to limit the amount of tokens that are sent and received within a period of time.
 
 The present specification is modeled after the [Osmosis IBC Rate Limit][osmosis-ibc-rate-limit] module.
 
