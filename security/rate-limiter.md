@@ -1,14 +1,38 @@
-# IBC rate limiter
+# IBC Rate Limiter
+
+- [IBC Rate Limiter](#ibc-rate-limiter)
+  - [Synopsis](#synopsis)
+  - [Overview and Basic Concepts](#overview-and-basic-concepts)
+    - [Motivation](#motivation)
+    - [Definitions](#definitions)
+  - [System Model and Properties](#system-model-and-properties)
+    - [Assumptions](#assumptions)
+    - [Desired Properties](#desired-properties)
+  - [Technical Specification](#technical-specification)
+    - [General Design](#general-design)
+    - [Data Structures](#data-structures)
+    - [Store Paths](#store-paths)
+    - [Key Helper Functions](#key-helper-functions)
+      - [Computing the Channel Value](#computing-the-channel-value)
+        - [Proposal](#proposal)
+      - [Checking and Updating Rate Limits](#checking-and-updating-rate-limits)
+      - [Undoing a Send](#undoing-a-send)
+    - [Sub-protocols](#sub-protocols)
+  - [Further Reading \& References](#further-reading--references)
 
 ## Synopsis
 
-This document specifies the data structures and state machine handling logic for a rate limiter module placed between the fungible token transfer bridge module (ICS20) and IBC core. This module enables chains to limit the amount of tokens that are sent an received within a period of time.
+This document specifies the data structures and state machine handling logic for a rate limiter module. The modules is designed to intermediate between the fungible token transfer bridge module (ICS20) and IBC core. The aim of this module is to enable chains to limit the amount of tokens that are sent and received within a period of time.
+
+The present specification is modeled after the [Osmosis IBC Rate Limit][osmosis-ibc-rate-limit] module.
 
 ## Overview and Basic Concepts
 
 ### Motivation
 
-TODO
+The IBC rate limiter can temper the impact of certain security problems. Specifically, it can prevent anomalous transfers of ICS20 funds across IBC networks.
+
+The logic behind a rate limiter is that assets are flowing through an IBC channel at a certain rate. This is the common-case situation. In situations of exploits or bugs, however, assets typically flow at a higher (anomalous) rate; in this case, a rate limiter can prevent complete draining of a bridged asset. It acts as a liveness throttling mechanism, in other words. The limier can also raise awareness that an exploit might be ongoing in such an event. The [BNB hack][bnb-bridge-hack] is an example of a problem that could have been alleviated by a rate limiter.
 
 ### Definitions
 
@@ -29,12 +53,12 @@ A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e.,
 
 ### Assumptions
 
-The module has access to a `bank` module similar to the one implemented in the [SDK](https://github.com/cosmos/cosmos-sdk/blob/main/x/bank/README.md). The specification assumes that this module permits the rate limiter module to query:
+The IBC rate limiter module has access to a `bank` module similar to the one implemented in the [SDK](https://github.com/cosmos/cosmos-sdk/blob/main/x/bank/README.md). The specification assumes that this module permits the rate limiter module to query:
 (i) the escrowed amount for a given denom and channel pair via the `bank.GetEscrowDenom` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
 
 TODO: more assumptions
 
-### Desired properties
+### Desired Properties
 
 TODO
 
@@ -48,7 +72,7 @@ Text from the doc that could be used here:
 
 A period only starts when the Flow is updated via receiving or sending a packet, and not right after the period ends. This means that if no calls happen after a period expires, the next period will begin at the time of the next call and be valid for the specified duration for the quota. This is a design decision to avoid the period calculations and thus reduce gas consumption.
 
-### Data structures
+### Data Structures
 
 A `FlowPath` is defined as:
 
@@ -92,7 +116,7 @@ interface Quota {
 
 Percentages can be different for send and receive. The name of the quota is expected to be a human-readable representation of the duration (i.e.: "weekly", "daily", "every-six-months", ...).
 
-A `RateLimiter` is a tuple of a `Quota` and `Flow`.
+A `RateLimiter` is a tuple of a `Quota` and a `Flow`.
 
 ```typescript
 interface RateLimiter {
@@ -101,7 +125,7 @@ interface RateLimiter {
 }
 ```
 
-### Store paths
+### Store Paths
 
 The rate limiter path is a private path that stores rate limiters.
 
@@ -111,9 +135,11 @@ function rateLimiterPath(channel: Identifier, denom: string): Path {
 }
 ```
 
-### Key helper functions
+### Key Helper Functions
 
-The `computeChannelValue` computes the channel value of a given denom depending of whether the chain is the source of the denom or not. In this specification we are proposing one possible way of computing the channel value, but one could think of alternatives. This has to be thought carefully: it determines how many tokens can be sent or received for a period of time.
+#### Computing the Channel Value
+
+The `computeChannelValue` function computes the channel value of a given denom depending of whether the chain is the source of the denom or not. In this specification we are proposing one possible way of computing the channel value, but one could think of alternatives. Setting the channel value has to be done carefully: it determines how many tokens can be sent or received for a period of time.
 
 Channel value may be computed when sending or receiving tokens. Depending on whether the source chain is the denom source or not, we have four cases:
 
@@ -122,9 +148,11 @@ Channel value may be computed when sending or receiving tokens. Depending on whe
 3) Send a non-native token: the sending chain is not the denom source.
 4) Receive a non-native token: the receiving chain is not the denom source.
 
+##### Proposal
+
 This specification proposes the following:
 
-- For (1), channel value = the available supply of denom in the sender chain. This may be a bit risky, as the total supply may be very large.
+- For (1), channel value = the available supply of denom in the sender chain. This may be risky, as the total supply may be very large.
 - For (2), channel value = escrow value (per channel and denom) in the receiver chain. One cannot receive more than what is in the escrow anyway, and this way we prevent attackers from emptying the escrow accounts completely.
 - For (3), channel value = the available supply (minted) of denom in the sender chain. Not risky, as this means only the tokens received through THIS channel due to prefixing of channel ids to denoms.
 - For (4), channel value = the available supply of denom in the sender chain.
@@ -143,6 +171,8 @@ function computeChannelValue(
     }
 }
 ```
+
+#### Checking and Updating Rate Limits
 
 The `checkAndUpdateRateLimits` function checks whether a send or receive should be processed or not depending on the rate limiter associated to the channel and denom. If it is accepted, then the rate limiter is updated to account for the newly sent/received tokens.
 
@@ -209,7 +239,9 @@ function checkAndUpdateRateLimits(
 }
 ```
 
-The function `undoSend` is called when an send of tokens went wrong. The function simply rolls back the outflow by substracting the amount sent.
+#### Undoing a Send
+
+The function `undoSend` is called when an send of tokens went wrong. (See `onAcknowledgePacket`  or `onTimeoutPacket` [sub-protocols](#sub-protocols) below for usage.) The function simply rolls back the outflow by substracting the amount sent.
 
 ```typescript
 function undoSend(packet: Packet) {
@@ -251,7 +283,7 @@ function SendPacket(packet: Packet): error {
 }
 ```
 
-`onRecvPacket` is called by the routing module when a packet addressed to this module has been received, before `onRecvPacket` at the fungible token transfer bridge module.
+Function `onRecvPacket` is called by the routing module when a packet addressed to this module has been received, before `onRecvPacket` at the fungible token transfer bridge module.
 
 ```typescript
 function onRecvPacket(packet: Packet): error {
@@ -297,3 +329,13 @@ function onTimeoutPacket(packet: Packet) {
     undoSend(packet)
 }
 ```
+
+## Further Reading & References
+
+- [Osmosis IBC rate limit module][osmosis-ibc-rate-limit]
+- Circuit breaker SDK [feature](https://github.com/cosmos/cosmos-sdk/issues/14226)
+
+<!-- Links & References -->
+
+[osmosis-ibc-rate-limit]: https://github.com/osmosis-labs/osmosis/tree/v13.0.0/x/ibc-rate-limit
+[bnb-bridge-hack]: https://rekt.news/bnb-bridge-rekt/
