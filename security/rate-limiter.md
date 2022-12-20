@@ -33,7 +33,7 @@ The present specification is modeled after the [Osmosis IBC Rate Limit][osmosis-
 
 The IBC rate limiter can temper the impact of certain security problems. Specifically, it can prevent anomalous transfers of ICS20 funds across IBC networks.
 
-The logic behind a rate limiter is that assets are flowing through an IBC channel at a certain rate. This is the common-case situation. In situations of exploits or bugs, however, assets typically flow at a higher (anomalous) rate; in this case, a rate limiter can prevent complete draining of a bridged asset. It acts as a liveness throttling mechanism, in other words. The limier can also raise awareness that an exploit might be ongoing in such an event. The [BNB hack][bnb-bridge-hack] is an example of a problem that could have been alleviated by a rate limiter.
+The logic behind a rate limiter is that assets are flowing through an IBC channel at a certain rate. This is the common-case situation. In situations of exploits or bugs, however, assets typically flow at a higher (anomalous) rate; in this case, a rate limiter can prevent complete draining of a bridged asset. In other words, it acts as a throttling mechanism. The limiter can also raise awareness that an exploit might be ongoing. The [BNB hack][bnb-bridge-hack] is an example of a problem that could have been alleviated by a rate limiter.
 
 ### Definitions
 
