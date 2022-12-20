@@ -46,9 +46,9 @@ A `Quota` is the percentage of the denom's total value that can be transferred t
 
 A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e., for each `FlowPath`. It is associated with a `Quota` and a `Flow`. Its quota represents the rate limiter configuration, and the flow its current state.
 
-`FungibleTokenPacketData` is as defined in ICS 20.
+`FungibleTokenPacketData` is as defined in ICS20.
 
-`Identifier`, `get`, `set`, `delete` and module-system related primitives are as defined in ICS 24.
+`Identifier`, `get`, `set`, `delete` and module-system related primitives are as defined in ICS24.
 
 ## System Model and Properties
 
@@ -342,7 +342,7 @@ Below we enumerate some known limitations of this specification:
 
 - The `rateLimiterPath` function implies there is at most one rate limiter for each `FlowPath` (i.e., a channel and denom pair). This design can be generalized to allow multiple rate limiters per `FlowPath`. It is desirable to have multiple flows per path, eg one for a period of a day, one for an hour, and another one for a 10-minute interval, because this allows capturing a wider range of attack scenarios.
 - The current design computes quotas within fixed intervals of time (see `Flow.periodEnd`). This is a simpler design but has clear limitations. For instance, it allows an entire quota of a flow to be exhausted briefly after that flow was reset, allowing an attacker to time their exploit so that it lands at the beginning of a flow period. A more principled design would adopt a rolling time window.
-- The present spec is not adapted yet to implement the IBC Middleware interface (specified in [ICS 30][ics-31-spec]).
+- The present spec is not adapted yet to implement the IBC Middleware interface (specified in [ICS30][ics-30-spec]).
 
 For those whishing to implement an IBC rate limiter, we provide also a few recommendations:
 
@@ -361,5 +361,5 @@ For those whishing to implement an IBC rate limiter, we provide also a few recom
 [osmosis-ibc-rate-limit]: https://github.com/osmosis-labs/osmosis/tree/v13.0.0/x/ibc-rate-limit
 [osmosis-ibc-rate-limit-inflow]: https://github.com/osmosis-labs/osmosis/tree/v13.0.0/x/ibc-rate-limit#inflow-parameterization
 [bnb-bridge-hack]: https://rekt.news/bnb-bridge-rekt/
-[ics-31-spec]: https://github.com/cosmos/ibc/tree/main/spec/app/ics-030-middleware
+[ics-30-spec]: https://github.com/cosmos/ibc/tree/main/spec/app/ics-030-middleware
 [design-figure-source]: https://app.excalidraw.com/l/4XqkU6POmGI/TTFAaey3Y7
