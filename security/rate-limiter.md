@@ -252,16 +252,7 @@ The function `undoSend` is called when a send of tokens went wrong. (See `onAckn
 ```typescript
 function undoSend(packet: Packet) {
     FungibleTokenPacketData data = packet.data
-    prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-    // we are the source if the denomination is not prefixed
-    source = data.denom.slice(0, len(prefix)) !== prefix
-    if source {
-        // the denom source chain; remove the denom prefix
-        denom = data.denom.slice(len(prefix))
-    } else {
-        // not the denom source chain
-        denom = data.denom
-    }
+    denom = data.denom
     rateLimiter = privateStore.get(rateLimiterPath(packet.sourceChannel, denom))
     rateLimiter.flow.outflow = rateLimiter.flow.outflow - data.amount
     privateStore.set(rateLimiterPath(packet.sourceChannel, denom), rateLimiter)
@@ -276,12 +267,13 @@ The `SendPacket` function should be called after `sendFungibleTokens` of the fun
 function SendPacket(packet: Packet): error {
     FungibleTokenPacketData data = packet.data
     prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-    source = data.denom.slice(0, len(prefix)) === prefix
+    senderChainIsSource = !data.denom.hasPrefix(prefix)
     // retrieve RateLimiter
     rateLimiter = privateStore.get(rateLimiterPath(packet.sourceChannel, data.denom))
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
-        err = checkAndUpdateRateLimits(packet.destChannel, source, data.denom, data.amount, OUT)
+        err = checkAndUpdateRateLimits(
+          packet.destinationChannel, senderChainIsSource, data.denom, data.amount, OUT)
         if (err !== nil)
             return err
     }
@@ -294,20 +286,22 @@ Function `onRecvPacket` is called by the routing module when a packet addressed 
 ```typescript
 function onRecvPacket(packet: Packet): error {
     FungibleTokenPacketData data = packet.data
-    prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-    source = data.denom.slice(0, len(prefix)) === prefix
-    if source {
-        // the denom source chain; remove the denom prefix
-        denom = data.denom.slice(len(prefix))
+    srcPrefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+    receiverChainIsSource = data.denom.hasPrefix(srcPrefix)
+    if receiverChainIsSource {
+        // the receiver chain originally sent this denomination
+        // remove the denom prefix
+        denom = data.denom.removePrefix(srcPrefix)
     } else {
-        // not the denom source chain
-        denom = data.denom
+        // the sender chain is the source, prefix with the destination channel
+        dstPrefix = "{packet.destinationPort}/{packet.destinationChannel}/"
+        denom = data.denom.addPrefix(dstPrefix)
     }
     // retrieve RateLimiter
-    rateLimiter = privateStore.get(rateLimiterPath(packet.destChannel, denom))
+    rateLimiter = privateStore.get(rateLimiterPath(packet.destinationChannel, denom))
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
-        err = checkAndUpdateRateLimits(packet.destChannel, source, denom, data.amount, IN)
+        err = checkAndUpdateRateLimits(packet.destinationChannel, receiverChainIsSource, denom, data.amount, IN)
         if (err !== nil)
             return err
     }
