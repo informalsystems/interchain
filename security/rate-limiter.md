@@ -37,6 +37,14 @@ The logic behind a rate limiter is that assets are flowing through an IBC channe
 
 ### Definitions
 
+`Native token` is the chain's inherent digital currency used to reward validators and as a payment method, e.g., to pay transaction fees. A token is native to a single chain. For instance, ATOM is the native token of Cosmos Hub.
+
+`Non-native tokens` are those tokens that a chain has received through IBC that are native to other chains.
+
+`Source chain` is as defined in ICS20.
+
+> In every token transfer, one of the two chains is the `source chain`. The sender chain is the `source chain` when the tokens are sent across a port and channel which are not equal to the last prefixed port and channel pair in the denom. For instance, if a chain A transfers its native tokens to a second chain B, then chain A is the `source chain`. The receiver chain is the `source chain` when the tokens are received across a port and channel which are equal to the last prefixed port and channel pair in the denom. For instance, if chain B transfers A's native tokens back to chain A, then chain A is the `source chain`. Note that a sender chain can be the `source chain` without sending its native token. A set of illustrative examples is discussed in [Computing the Channel Value](#computing-the-channel-value).
+
 `FlowPath` is a tuple of a denom and a channel.
 
 `Flow` represents the transfer of value for a denom through an IBC channel during a time window.
@@ -147,10 +155,10 @@ The `computeChannelValue` function computes the channel value of a given denom d
 
 Channel value may be computed when sending or receiving tokens. Depending on whether the sender or receiving chain is the denom source or not, we have four cases:
 
-1) Sending chain is the denom source (escrow).
-2) Receiving chain is the denom source (un-escrow).
-3) Sending chain is not the denom source (burn).
-4) Receiving chain is not the denom source (mint).
+1) Sending chain is the denom source (ICS20 escrow).
+2) Receiving chain is the denom source (ICS20 un-escrow).
+3) Sending chain is not the denom source (ICS20 burn).
+4) Receiving chain is not the denom source (ICS20 mint).
 
 ##### Proposal
 
@@ -161,16 +169,13 @@ This specification proposes the following:
 - For (3), channel value = the available supply (minted) of denom in the sender chain.
 - For (4), channel value = the available supply of denom in the receiver chain.
 
-It is possible that the channel values are very small or even zero. Rate limiters should only be put in place or activated when channel values are considered high enough.
-
 The figure below ([figure source][denoms-figure-source]) shows a few examples of transfers that fall into the different categories described above.
-There are three chains, A, B and C. One channel is created between A and B with channel identifiers `cha1` on A and `chb1` on B. A second channel is created between B and C with channel identifiers `chb2` on B and `chc1` on C.
-There are `100 a` tokens minted on chain A.
+There are three chains, A, B and C. One channel is created between A and B with channel identifiers `cha1` on A and `chb1` on B. A second channel is created between B and C with channel identifiers `chb2` on B and `chc1` on C. Let `a` be the native token of chain A and assume that there are `100 a` tokens minted on chain A.
 The figure shows the following transfers:
 
 - `10 a` tokens are sent from A to B - case 1: sender is the source.
   - channel value = `100 a`
-  - `10 a` tokens are escrowed on A to the `cha1` account.
+  - `10 a` tokens are escrowed on A to the `cha1` escrow account.
 
 - the `10 a` tokens from A are received on B - case 4: receiver is not the source (denom is **prefixed**).
   - channel value = `0 chb1/a`
@@ -178,7 +183,7 @@ The figure shows the following transfers:
 
 - `7 chb1/a` are sent from B to C - case 1: sender is the source.
   - channel value = `10 chb1/a`
-  - `7 chb1/a` tokens are escrowed on B for the `chb2` account.
+  - `7 chb1/a` tokens are escrowed on B for the escrow `chb2` account.
 
 - the `7 chb1/a` from B are received on C - case 4: receiver is not the source (denom is **prefixed**).
   - channel value = `0 chc1/chb1/a`
@@ -203,6 +208,7 @@ The figure shows the following transfers:
 
 ![Denoms and Available vs Escrowed](./assets/denoms_totalsupply_escrowed.png)
 
+As shown in the above examples, it is possible that the channel values are very small or even zero in some cases. Rate limiters should only be put in place or activated when channel values are considered high enough.
 
 ```typescript
 function computeChannelValue(
