@@ -385,6 +385,7 @@ function onTimeoutPacket(packet: Packet) {
 
 Below we enumerate some known limitations of this specification:
 
+- The specification does not include transactions to set/modify/remove rate limiters, which should be trivial to add.
 - The `rateLimiterPath` function implies there is at most one rate limiter for each `FlowPath` (i.e., a port, channel and denom triple). This design can be generalized to allow multiple rate limiters per `FlowPath`. It is desirable to have multiple flows per path, eg one for a period of a day, one for an hour, and another one for a 10-minute interval, because this allows capturing a wider range of attack scenarios.
 - The current design computes quotas within fixed intervals of time (see `Flow.periodEnd`). This is a simpler design but has clear limitations. For instance, it allows an entire quota of a flow to be exhausted briefly after that flow was reset, allowing an attacker to time their exploit so that it lands at the beginning of a flow period. A more principled design would adopt a rolling time window.
 - The present spec is not adapted yet to implement the IBC Middleware interface (specified in [ICS30][ics-30-spec]).
