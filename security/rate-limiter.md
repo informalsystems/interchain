@@ -152,6 +152,22 @@ Channel value may be computed when sending or receiving tokens. Depending on whe
 3) Send a non-native token: the sending chain is not the denom source.
 4) Receive a non-native token: the receiving chain is not the denom source.
 
+The figure below ([figure source][denoms-figure-source]) shows a few examples of transfers that fall into the different categories described above.
+There are three chains, A, B and C. One channel is created between A and B with channel identifiers `cha1` on A and `chb1` on B. A second channel is created between B and C with channel identifiers `chb2` on B and `chc1` on C.
+There are 100a tokens minted on chain A.
+The figure shows the following transfers:
+
+- `10 a` tokens are sent from A to B - case 1: sender is the source. These tokens are escrowed on A to the `cha1` account.
+- the `10 a` tokens from A are received on B - case 4: receiver is not the source. `10 chb1/a` tokens are minted on B.
+- `7 chb1/a` are sent from B to C - case 1: sender is the source. The tokens are escrowed on B for the `chb2` account.
+- the `7 chb1/a` from B are received on C - case 4: receiver is not the source. `7 chc1/chb1/a` are minted on C.
+- `3 chc1/chb1/a` are sent from C **back** to B - case 3: sender is not the source. `3 chc1/chb1/a` tokens are burnt on C.
+- the `3 chc1/chb1/a` tokens from C are received on B - case 2: receiver is the source. `3 chc1/chb1/a` are unescrowed from `chb2` account.
+- `3 chb1/a` tokens are sent from B **back** to A - case 3: sender is not the source. `3 chb1/a` tokens are burnt on B.
+- the `3 chb1/a` tokens from B are received on A - case 2: receiver is the source. `3 chb1/a` are unsescrowed from `cha1` account.
+
+![Denoms and Available vs Escrowed](./assets/denoms_totalsupply_escrowed.png)
+
 ##### Proposal
 
 This specification proposes the following:
@@ -357,3 +373,4 @@ For those whishing to implement an IBC rate limiter, we provide also a few recom
 [bnb-bridge-hack]: https://rekt.news/bnb-bridge-rekt/
 [ics-30-spec]: https://github.com/cosmos/ibc/tree/main/spec/app/ics-030-middleware
 [design-figure-source]: https://app.excalidraw.com/l/4XqkU6POmGI/TTFAaey3Y7
+[denoms-figure-source]: https://app.excalidraw.com/s/4XqkU6POmGI/AW2wfSzj6f1
