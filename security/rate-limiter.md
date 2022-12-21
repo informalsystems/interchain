@@ -55,7 +55,7 @@ A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e.,
 ### Assumptions
 
 The IBC rate limiter module has access to a `bank` module similar to the one implemented in the [SDK](https://github.com/cosmos/cosmos-sdk/blob/main/x/bank/README.md). The specification assumes that this module permits the rate limiter module to query:
-(i) the escrowed amount for a given denom and channel pair via the `bank.GetEscrowDenom` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
+(i) the escrowed amount for a given denom and channel pair via the `bank.GetEscrowedAmount` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
 
 See also [Limitations and Recommendations](#limitations-and-recommendations).
 
@@ -213,7 +213,7 @@ function computeChannelValue(
     if (source && direction === IN) {
         // Handle case (2)
         escrowAccount = channelEscrowAddresses[channelId]
-        return bank.GetEscrowDenom(escrowAccount, denom)
+        return bank.GetEscrowedAmount(escrowAccount, denom)
     } else {
         // Cases (1), (3), and (4)
         return bank.GetAvailableSupply(denom)
@@ -316,7 +316,7 @@ function SendPacket(packet: Packet): error {
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
         err = checkAndUpdateRateLimits(
-          packet.destinationChannel, senderChainIsSource, data.denom, data.amount, OUT)
+          packet.destChannel, senderChainIsSource, data.denom, data.amount, OUT)
         if (err !== nil)
             return err
     }
@@ -337,14 +337,14 @@ function onRecvPacket(packet: Packet): error {
         denom = data.denom.removePrefix(srcPrefix)
     } else {
         // the sender chain is the source, prefix with the destination channel
-        dstPrefix = "{packet.destinationPort}/{packet.destinationChannel}/"
+        dstPrefix = "{packet.destPort}/{packet.destChannel}/"
         denom = data.denom.addPrefix(dstPrefix)
     }
     // retrieve RateLimiter
-    rateLimiter = privateStore.get(rateLimiterPath(packet.destinationChannel, denom))
+    rateLimiter = privateStore.get(rateLimiterPath(packet.destChannel, denom))
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
-        err = checkAndUpdateRateLimits(packet.destinationChannel, receiverChainIsSource, denom, data.amount, IN)
+        err = checkAndUpdateRateLimits(packet.destChannel, receiverChainIsSource, denom, data.amount, IN)
         if (err !== nil)
             return err
     }
