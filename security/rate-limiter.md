@@ -37,24 +37,22 @@ The logic behind a rate limiter is that assets are flowing through an IBC channe
 
 ### Definitions
 
-`Native token` is the chain's inherent digital currency used to reward validators and as a payment method, e.g., to pay transaction fees. A token is native to a single chain. For instance, ATOM is the native token of Cosmos Hub.
-
-`Non-native tokens` are those tokens that a chain has received through IBC that are native to other chains.
+`Native token` is the chain's inherent digital currency used to reward validators and as a payment method, e.g., to pay transaction fees. A token is native to a single chain. For instance, ATOM is the native token of Cosmos Hub. `Non-native tokens` are those tokens that a chain has received through IBC that are native to other chains.
 
 `Source chain` is as defined in ICS20.
 
 > In every token transfer, one of the two chains is the `source chain`. The sender chain is the `source chain` when the tokens are sent across a port and channel which are not equal to the last prefixed port and channel pair in the denom. For instance, if a chain A transfers its native tokens to a second chain B, then chain A is the `source chain`. The receiver chain is the `source chain` when the tokens are received across a port and channel which are equal to the last prefixed port and channel pair in the denom. For instance, if chain B transfers A's native tokens back to chain A, then chain A is the `source chain`. Note that a sender chain can be the `source chain` without sending its native token. A set of illustrative examples is discussed in [Computing the Channel Value](#computing-the-channel-value).
 
-`FlowPath` is a tuple of a denom and a channel.
+`FlowPath` is a triple of denom, port and channel id.
 
 `Flow` represents the transfer of value for a denom through an IBC channel during a time window.
 Tokens can flow both in and out. When a chain receives tokens, we say that they flow in. When a chain sends tokens, we say that they flow out.
 
 A `Quota` is the percentage of the denom's total value that can be transferred through the channel in a given period of time (duration).
 
-A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e., for each `FlowPath`. It is associated with a `Quota` and a `Flow`. Its quota represents the rate limiter configuration, and the flow its current state.
+A `RateLimiter` is the main structure tracked for each port/channel/denom triple, i.e., for each `FlowPath`. It is associated with a `Quota` and a `Flow`. Its quota represents the rate limiter configuration, and the flow its current state.
 
-`FungibleTokenPacketData` is as defined in ICS20.
+`FungibleTokenPacketData` and `channelEscrowAddresses` is as defined in ICS20.
 
 `Identifier`, `get`, `set`, `delete` and module-system related primitives are as defined in ICS24.
 
@@ -63,7 +61,7 @@ A `RateLimiter` is the main structure tracked for each channel/denom pair, i.e.,
 ### Assumptions
 
 The IBC rate limiter module has access to a `bank` module similar to the one implemented in the [SDK](https://github.com/cosmos/cosmos-sdk/blob/main/x/bank/README.md). The specification assumes that this module permits the rate limiter module to query:
-(i) the escrowed amount for a given denom and channel pair via the `bank.GetEscrowedAmount` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
+(i) the escrowed amount for a given port/channel/denom triple via the `bank.GetEscrowedAmount` function, and (ii) the total available supply of tokens of a given denom via the `bank.GetAvailableSupply` function.
 
 See also [Limitations and Recommendations](#limitations-and-recommendations).
 
@@ -92,6 +90,7 @@ A `FlowPath` is defined as:
 interface FlowPath {
   denom: string
   channel: Identifier
+  port: Identifier
 }
 ```
 
@@ -142,8 +141,8 @@ interface RateLimiter {
 The rate limiter path is a private path that stores rate limiters.
 
 ```typescript
-function rateLimiterPath(channel: Identifier, denom: string): Path {
-    return "ratelimiter/{channel}/{denom}"
+function rateLimiterPath(portIdentifier: Identifier, channelIdentifier: Identifier, denom: string): Path {
+    return "rateLimiter/ports/{portIdentifier}/channels/{channelIdentifier}/denom/{denom}"
 }
 ```
 
@@ -212,13 +211,14 @@ As shown in the above examples, it is possible that the channel values are very 
 
 ```typescript
 function computeChannelValue(
+    portId: Identifier,
     channelId: Identifier,
     source: bool,
     direction: FlowDirection,
     denom: string): int {
     if (source && direction === IN) {
         // Handle case (2)
-        escrowAccount = channelEscrowAddresses[channelId]
+        escrowAccount = channelEscrowAddresses[portId, channelId]
         return bank.GetEscrowedAmount(escrowAccount, denom)
     } else {
         // Cases (1), (3), and (4)
@@ -229,7 +229,7 @@ function computeChannelValue(
 
 #### Checking and Updating Rate Limits
 
-The `checkAndUpdateRateLimits` function checks whether a send or receive should be processed or not (i.e., limited) depending on the rate limiter associated to the channel and denom. If it is accepted, then the rate limiter is updated to account for the newly sent/received tokens.
+The `checkAndUpdateRateLimits` function checks whether a send or receive should be processed or not (i.e., limited) depending on the rate limiter associated to a `FlowPath`. If it is accepted, then the rate limiter is updated to account for the newly sent/received tokens.
 
 The function introduces two concepts: flow balance and quota capacity. Flow balance is how much absolute value for the denom has moved through the channel during the current period. Quota capacity is how much value the quota allows to transfer in both directions in a given period of time.
 
@@ -237,13 +237,14 @@ Note that channel value is reset when the duration expires or if it has not been
 
 ```typescript
 function checkAndUpdateRateLimits(
+    portId: Identifier,
     channelId: Identifier,
     source: bool,
     denom: string,
     amount: int,
     direction: FlowDirection): error {
     // retrieve RateLimiter, quota and flow
-    rateLimiter = privateStore.get(rateLimiterPath(channelId, denom))
+    rateLimiter = privateStore.get(rateLimiterPath(portId, channelId, denom))
     quota = rateLimiter.quota
     flow = rateLimiter.flow
     // compute balances
@@ -256,7 +257,7 @@ function checkAndUpdateRateLimits(
         flow.inflow = 0
         flow.outflow = 0
         flow.periodEnd = now + quota.duration
-        quota.channelValue = computeChannelValue(channelId, source, direction, data.denom)
+        quota.channelValue = computeChannelValue(portId, channelId, source, direction, data.denom)
     }
 
     // compute capacity
@@ -288,7 +289,7 @@ function checkAndUpdateRateLimits(
     //update rate limiter
     rateLimiter.quota = quota
     rateLimiter.flow = flow
-    privateStore.set(rateLimiterPath(channelId, denom), rateLimiter)
+    privateStore.set(rateLimiterPath(portId, channelId, denom), rateLimiter)
 
     return nil
 }
@@ -302,9 +303,9 @@ The function `undoSend` is called when a send of tokens went wrong. (See `onAckn
 function undoSend(packet: Packet) {
     FungibleTokenPacketData data = packet.data
     denom = data.denom
-    rateLimiter = privateStore.get(rateLimiterPath(packet.sourceChannel, denom))
+    rateLimiter = privateStore.get(rateLimiterPath(packet.sourcePort, packet.sourceChannel, denom))
     rateLimiter.flow.outflow = rateLimiter.flow.outflow - data.amount
-    privateStore.set(rateLimiterPath(packet.sourceChannel, denom), rateLimiter)
+    privateStore.set(rateLimiterPath(packet.sourcePort, packet.sourceChannel, denom), rateLimiter)
 }
 ```
 
@@ -318,11 +319,11 @@ function SendPacket(packet: Packet): error {
     prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
     senderChainIsSource = !data.denom.hasPrefix(prefix)
     // retrieve RateLimiter
-    rateLimiter = privateStore.get(rateLimiterPath(packet.sourceChannel, data.denom))
+    rateLimiter = privateStore.get(rateLimiterPath(packet.sourcePort, packet.sourceChannel, data.denom))
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
         err = checkAndUpdateRateLimits(
-          packet.destChannel, senderChainIsSource, data.denom, data.amount, OUT)
+          packet.destPort, packet.destChannel, senderChainIsSource, data.denom, data.amount, OUT)
         if (err !== nil)
             return err
     }
@@ -347,10 +348,11 @@ function onRecvPacket(packet: Packet): error {
         denom = data.denom.addPrefix(dstPrefix)
     }
     // retrieve RateLimiter
-    rateLimiter = privateStore.get(rateLimiterPath(packet.destChannel, denom))
+    rateLimiter = privateStore.get(rateLimiterPath(packet.destPort, packet.destChannel, denom))
     // if the rate limiter exists for this flow path, then check quota
     if (rateLimiter !== nil) {
-        err = checkAndUpdateRateLimits(packet.destChannel, receiverChainIsSource, denom, data.amount, IN)
+        err = checkAndUpdateRateLimits(
+          packet.destPort, packet.destChannel, receiverChainIsSource, denom, data.amount, IN)
         if (err !== nil)
             return err
     }
@@ -383,7 +385,7 @@ function onTimeoutPacket(packet: Packet) {
 
 Below we enumerate some known limitations of this specification:
 
-- The `rateLimiterPath` function implies there is at most one rate limiter for each `FlowPath` (i.e., a channel and denom pair). This design can be generalized to allow multiple rate limiters per `FlowPath`. It is desirable to have multiple flows per path, eg one for a period of a day, one for an hour, and another one for a 10-minute interval, because this allows capturing a wider range of attack scenarios.
+- The `rateLimiterPath` function implies there is at most one rate limiter for each `FlowPath` (i.e., a port, channel and denom triple). This design can be generalized to allow multiple rate limiters per `FlowPath`. It is desirable to have multiple flows per path, eg one for a period of a day, one for an hour, and another one for a 10-minute interval, because this allows capturing a wider range of attack scenarios.
 - The current design computes quotas within fixed intervals of time (see `Flow.periodEnd`). This is a simpler design but has clear limitations. For instance, it allows an entire quota of a flow to be exhausted briefly after that flow was reset, allowing an attacker to time their exploit so that it lands at the beginning of a flow period. A more principled design would adopt a rolling time window.
 - The present spec is not adapted yet to implement the IBC Middleware interface (specified in [ICS30][ics-30-spec]).
 
