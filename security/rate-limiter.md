@@ -69,8 +69,8 @@ See also [Limitations and Recommendations](#limitations-and-recommendations).
 
 Intuitively, the desired properties of the rate limiter are as follows:
 
-- **Preserve legitimate flow**: The IBC rate limiter does not prevent (i.e., limit nor throttle) legitimate user flow of tokens. Legitimate flow is traffic that is within the allowed percentage set by any configurated `Quota` for any given `FlowPath`.
-- **Prevent illegitimate flow**: The rate limiter blocks any send or receive of tokens that exceeds the allowed percentage within the preset time window (set by any configurated `Quota` for any `FlowPath`).
+- **Preserve legitimate flow**: The IBC rate limiter does not prevent (i.e., limit nor throttle) legitimate user flow of tokens. Legitimate flow is traffic that is within the allowed percentage set by any configured `Quota` for any given `FlowPath`.
+- **Prevent illegitimate flow**: The rate limiter blocks any send or receive of tokens that exceeds the allowed percentage within the preset time window (set by any configured `Quota` for any `FlowPath`).
 
 ## Technical Specification
 
@@ -78,7 +78,7 @@ Intuitively, the desired properties of the rate limiter are as follows:
 
 The rate limiter can be conceptualized as a middleware, sitting between the core IBC modules (for sending, receiving, acknowledging, or timing out packets) and the IBC application layer (ICS20 in this specific case). The figure below sketches the rate limiter design from the perspective of sending a packet ([figure source][design-figure-source]). The functions and types colored in the blue font belong to this spec.
 
-![IBC rate limiter general design](./assets/ibc-rate-limiter-general-design.svg)
+![IBC rate limiter general design](./assets/ibc-rate-limiter-general-design.png)
 
 Every time there is a fungible tokens packet sent, the rate limiter `SendPacket` function is called. This function retrieves the `FlowPath` and any rate limiter that may be set for that path, then calls into `checkAndUpdateRateLimits`, which verifies if the packet should be accepted. If the quota is reached, it throws a `RateLimitExceededError`. Otherwise the rate limiter is updated and the IBC core `SendPacket` method is called.
 
@@ -297,7 +297,7 @@ function checkAndUpdateRateLimits(
 
 #### Undoing a Send
 
-The function `undoSend` is called when a send of tokens went wrong. (See `onAcknowledgePacket`  or `onTimeoutPacket` [sub-protocols](#sub-protocols) below for usage of `undoSend`.) This function simply rolls back the outflow by substracting the amount sent.
+The function `undoSend` is called when a send of tokens went wrong. (See `onAcknowledgePacket`  or `onTimeoutPacket` [sub-protocols](#sub-protocols) below for usage of `undoSend`.) This function simply rolls back the outflow by subtracting the amount sent.
 
 ```typescript
 function undoSend(packet: Packet) {
@@ -390,11 +390,11 @@ Below we enumerate some known limitations of this specification:
 - The current design computes quotas within fixed intervals of time (see `Flow.periodEnd`). This is a simpler design but has clear limitations. For instance, it allows an entire quota of a flow to be exhausted briefly after that flow was reset, allowing an attacker to time their exploit so that it lands at the beginning of a flow period. A more principled design would adopt a rolling time window.
 - The present spec is not adapted yet to implement the IBC Middleware interface (specified in [ICS30][ics-30-spec]).
 
-For those whishing to implement an IBC rate limiter, we provide also a few recommendations:
+For those wishing to implement an IBC rate limiter, we provide also a few recommendations:
 
-- The channel value is the key parameter to the rate limiter, in addition to `maxPercentageSend` and `maxPercentageRecv` as part of a `Quota`. These values determine what is *legitimate* packet flow. Misconfiguring the channel value can allow too much traffic (which can lead to complete depegging of an asset) or too little (preventing user transactions and raising UX/usability concerns). The discussion on [computing the channel value](#computing-the-channel-value) is merely a proposal.
+- The channel value is the key parameter to the rate limiter, in addition to `maxPercentageSend` and `maxPercentageRecv` as part of a `Quota`. These values determine what is *legitimate* packet flow. Misconfiguring the channel value can allow too much traffic (which can lead to complete de-pegging of an asset) or too little (preventing user transactions and raising UX/usability concerns). The discussion on [computing the channel value](#computing-the-channel-value) is merely a proposal.
 - We recommend running simulations of a rate limiter behavior with real data from mainnet, eg between Hub (`channel-141`) and Osmosis (`channel-0`).
-- Osmosis ([since v13.0][osmosis-ibc-rate-limit]) has adopted a rate limiter for throttling asset flow on high-value channels. This solution [also protects Osmosis counterparty networks][osmosis-ibc-rate-limit-inflow]. It would be recommended that counterparty networks wishing to adopt a rate limiter would employ a design and configuration that are *complementary* to the Osmosis one. This could mean, for instance, that CosmosHub (as a counterparty of Osmosis) employs a different method to configuring the channel value and to dealing with `RateLimitExceededError` cases.
+- Osmosis ([since v13.0][osmosis-ibc-rate-limit]) has adopted a rate limiter for throttling asset flow on high-value channels. This solution [also protects Osmosis counterparty networks][osmosis-ibc-rate-limit-inflow]. It would be recommended that counterparty networks wishing to adopt a rate limiter would employ a design and configuration that are *complementary* to the Osmosis one. This could mean, for instance, that CosmosHub (as a counterparty of Osmosis) employs a different method to configuring the channel value and to dealing with `RateLimitExceededError` case.
 - On period computation, inspired from from Osmosis docs, we recommend that a period only starts when the Flow is updated via receiving or sending a packet, and not right after the period ends. This means that if no calls happen after a period expires, the next period will begin at the time of the next call and be valid for the specified duration for the quota. This is a design decision to avoid the period calculations and thus reduce gas consumption.
 
 ### Further Reading
