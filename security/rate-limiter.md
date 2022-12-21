@@ -145,37 +145,64 @@ function rateLimiterPath(channel: Identifier, denom: string): Path {
 
 The `computeChannelValue` function computes the channel value of a given denom depending of whether the chain is the source of the denom or not. In this specification we are proposing one possible way of computing the channel value, but one could think of alternatives. Setting the channel value has to be done carefully: it determines how many tokens can be sent or received for a period of time.
 
-Channel value may be computed when sending or receiving tokens. Depending on whether the source chain is the denom source or not, we have four cases:
+Channel value may be computed when sending or receiving tokens. Depending on whether the sender or receiving chain is the denom source or not, we have four cases:
 
-1) Send a native token: the sending chain is the denom source.
-2) Receive a native token: the receiving chain is the denom source.
-3) Send a non-native token: the sending chain is not the denom source.
-4) Receive a non-native token: the receiving chain is not the denom source.
-
-The figure below ([figure source][denoms-figure-source]) shows a few examples of transfers that fall into the different categories described above.
-There are three chains, A, B and C. One channel is created between A and B with channel identifiers `cha1` on A and `chb1` on B. A second channel is created between B and C with channel identifiers `chb2` on B and `chc1` on C.
-There are 100a tokens minted on chain A.
-The figure shows the following transfers:
-
-- `10 a` tokens are sent from A to B - case 1: sender is the source. These tokens are escrowed on A to the `cha1` account.
-- the `10 a` tokens from A are received on B - case 4: receiver is not the source. `10 chb1/a` tokens are minted on B.
-- `7 chb1/a` are sent from B to C - case 1: sender is the source. The tokens are escrowed on B for the `chb2` account.
-- the `7 chb1/a` from B are received on C - case 4: receiver is not the source. `7 chc1/chb1/a` are minted on C.
-- `3 chc1/chb1/a` are sent from C **back** to B - case 3: sender is not the source. `3 chc1/chb1/a` tokens are burnt on C.
-- the `3 chc1/chb1/a` tokens from C are received on B - case 2: receiver is the source. `3 chc1/chb1/a` are unescrowed from `chb2` account.
-- `3 chb1/a` tokens are sent from B **back** to A - case 3: sender is not the source. `3 chb1/a` tokens are burnt on B.
-- the `3 chb1/a` tokens from B are received on A - case 2: receiver is the source. `3 chb1/a` are unsescrowed from `cha1` account.
-
-![Denoms and Available vs Escrowed](./assets/denoms_totalsupply_escrowed.png)
+1) Sending chain is the denom source (escrow).
+2) Receiving chain is the denom source (un-escrow).
+3) Sending chain is not the denom source (burn).
+4) Receiving chain is not the denom source (mint).
 
 ##### Proposal
 
 This specification proposes the following:
 
-- For (1), channel value = the available supply of denom in the sender chain. This may be risky, as the total supply may be very large.
-- For (2), channel value = escrow value (per channel and denom) in the receiver chain. One cannot receive more than what is in the escrow anyway, and this way we prevent attackers from emptying the escrow accounts completely.
-- For (3), channel value = the available supply (minted) of denom in the sender chain. Not risky, as this means only the tokens received through THIS channel due to prefixing of channel ids to denoms.
-- For (4), channel value = the available supply of denom in the sender chain.
+- For (1), channel value = the available supply of denom in the sender chain. The total supply may be very large if the denom is the chain's native token.
+- For (2), channel value = escrow value (per channel and denom) on the receiver chain.
+- For (3), channel value = the available supply (minted) of denom in the sender chain.
+- For (4), channel value = the available supply of denom in the receiver chain.
+
+It is possible that the channel values are very small or even zero. Rate limiters should only be put in place or activated when channel values are considered high enough.
+
+The figure below ([figure source][denoms-figure-source]) shows a few examples of transfers that fall into the different categories described above.
+There are three chains, A, B and C. One channel is created between A and B with channel identifiers `cha1` on A and `chb1` on B. A second channel is created between B and C with channel identifiers `chb2` on B and `chc1` on C.
+There are `100 a` tokens minted on chain A.
+The figure shows the following transfers:
+
+- `10 a` tokens are sent from A to B - case 1: sender is the source.
+  - channel value = `100 a`
+  - `10 a` tokens are escrowed on A to the `cha1` account.
+
+- the `10 a` tokens from A are received on B - case 4: receiver is not the source (denom is **prefixed**).
+  - channel value = `0 chb1/a`
+  - `10 chb1/a` tokens are minted on B.
+
+- `7 chb1/a` are sent from B to C - case 1: sender is the source.
+  - channel value = `10 chb1/a`
+  - `7 chb1/a` tokens are escrowed on B for the `chb2` account.
+
+- the `7 chb1/a` from B are received on C - case 4: receiver is not the source (denom is **prefixed**).
+  - channel value = `0 chc1/chb1/a`
+  - `7 chc1/chb1/a` are minted on C.
+
+- `3 chc1/chb1/a` are sent from C **back** to B - case 3: sender is not the source.
+  - channel value = `7 chc1/chb1/a`
+  - `3 chc1/chb1/a` tokens are burnt on C.
+
+- the `3 chc1/chb1/a` tokens from C are received on B - case 2: receiver is the source (denom is **un-prefixed**).
+  - channel value = `7 chb1/a`
+  - `3 chb1/a` are unescrowed from `chb2` account.
+
+- `3 chb1/a` tokens are sent from B **back** to A - case 3: sender is not the source.
+  - channel value = `6 chb1/a`
+  - `3 chb1/a` tokens are burnt on B.
+
+- the `3 chb1/a` tokens from B are received on A - case 2: receiver is the source (denom is **un-prefixed**).
+  - channel value = `10 a`
+  - `3 a` are unescrowed from `cha1` account.
+
+
+![Denoms and Available vs Escrowed](./assets/denoms_totalsupply_escrowed.png)
+
 
 ```typescript
 function computeChannelValue(
